@@ -121,6 +121,8 @@ const ui = {
   message: document.getElementById("message"),
 };
 
+const errorBanner = document.getElementById("error-banner");
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color("#cfe8ff");
 
@@ -745,34 +747,47 @@ function setupUi() {
   });
 }
 
-async function init() {
-  const [tileObj, towerObj, roofObj] = await Promise.allSettled([
-    loadObj("assets/models/primitives/tile_ground.obj"),
-    loadObj("assets/models/primitives/tower_base.obj"),
-    loadObj("assets/models/primitives/barn_roof.obj"),
-  ]);
-
-  assets.tile = tileObj.status === "fulfilled" ? tileObj.value : null;
-  assets.towerBase = towerObj.status === "fulfilled" ? towerObj.value : null;
-  assets.roof = roofObj.status === "fulfilled" ? roofObj.value : null;
-
-  state.path = generatePath();
-  buildFarmTiles();
-  buildPathDecor();
-  buildCuteDecor();
-  previewTower = createPreviewTower();
-  setupUi();
-  setSelectedTowerType(state.selectedTowerType);
-  if (!assets.tile || !assets.towerBase || !assets.roof) {
-    setMessage("Loaded fallback geometry for the map.", "warning", 4000);
-  } else {
-    setMessage("Build towers before the wave!", "info", 3000);
+function showError(message) {
+  if (!errorBanner) {
+    return;
   }
+  errorBanner.textContent = message;
+  errorBanner.hidden = false;
+}
 
-  window.addEventListener("pointermove", onPointerMove);
-  window.addEventListener("click", onClick);
-  window.addEventListener("resize", resize);
-  requestAnimationFrame(animate);
+async function init() {
+  try {
+    const [tileObj, towerObj, roofObj] = await Promise.allSettled([
+      loadObj("assets/models/primitives/tile_ground.obj"),
+      loadObj("assets/models/primitives/tower_base.obj"),
+      loadObj("assets/models/primitives/barn_roof.obj"),
+    ]);
+
+    assets.tile = tileObj.status === "fulfilled" ? tileObj.value : null;
+    assets.towerBase = towerObj.status === "fulfilled" ? towerObj.value : null;
+    assets.roof = roofObj.status === "fulfilled" ? roofObj.value : null;
+
+    state.path = generatePath();
+    buildFarmTiles();
+    buildPathDecor();
+    buildCuteDecor();
+    previewTower = createPreviewTower();
+    setupUi();
+    setSelectedTowerType(state.selectedTowerType);
+    if (!assets.tile || !assets.towerBase || !assets.roof) {
+      setMessage("Loaded fallback geometry for the map.", "warning", 4000);
+    } else {
+      setMessage("Build towers before the wave!", "info", 3000);
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("click", onClick);
+    window.addEventListener("resize", resize);
+    requestAnimationFrame(animate);
+  } catch (error) {
+    console.error("Failed to initialize game.", error);
+    showError("Failed to load 3D assets or WebGL. Check console/network.");
+  }
 }
 
 init();

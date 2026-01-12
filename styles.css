@@ -10,6 +10,22 @@ body {
   overflow: hidden;
 }
 
+#error-banner {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  max-width: min(520px, 92vw);
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #fde1df;
+  color: #7c2f2a;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: 0 10px 24px rgba(56, 40, 20, 0.25);
+}
+
 #game {
   width: 100vw;
   height: 100vh;
