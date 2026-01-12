@@ -3,23 +3,49 @@ import { OBJLoader } from "https://unpkg.com/three@0.158.0/examples/jsm/loaders/
 
 const GRID_SIZE = 9;
 const TILE_SIZE = 1.2;
-const PATH = [
-  { x: 0, z: 0 },
-  { x: 1, z: 0 },
-  { x: 2, z: 0 },
-  { x: 3, z: 0 },
-  { x: 3, z: 1 },
-  { x: 3, z: 2 },
-  { x: 4, z: 2 },
-  { x: 5, z: 2 },
-  { x: 5, z: 3 },
-  { x: 5, z: 4 },
-  { x: 6, z: 4 },
-  { x: 7, z: 4 },
-  { x: 7, z: 5 },
-  { x: 7, z: 6 },
-  { x: 8, z: 6 },
-];
+const MAP_RANDOMNESS = 0.65;
+
+const TOWER_TYPES = {
+  sprout: {
+    id: "sprout",
+    name: "Sprout",
+    cost: 50,
+    range: 2.6,
+    fireRate: 0.8,
+    damage: 1,
+    projectileSpeed: 4.8,
+    projectileColor: "#ffdf7e",
+    baseColor: "#f2f0e6",
+    roofColor: "#f2a4a4",
+    description: "Fast shots, short range.",
+  },
+  bloom: {
+    id: "bloom",
+    name: "Bloom",
+    cost: 75,
+    range: 3.2,
+    fireRate: 1.1,
+    damage: 2,
+    projectileSpeed: 4.2,
+    projectileColor: "#b6f0ff",
+    baseColor: "#e6f4ff",
+    roofColor: "#78c6f0",
+    description: "Balanced range with heavier hits.",
+  },
+  orchard: {
+    id: "orchard",
+    name: "Orchard",
+    cost: 110,
+    range: 4.0,
+    fireRate: 1.6,
+    damage: 3,
+    projectileSpeed: 3.6,
+    projectileColor: "#f6c1ff",
+    baseColor: "#f7f0dd",
+    roofColor: "#c98bf2",
+    description: "Long range, slower but powerful.",
+  },
+};
 
 const TOWER_TYPES = {
   sprout: {
@@ -71,6 +97,7 @@ const state = {
   towers: [],
   enemies: [],
   projectiles: [],
+  path: [],
   lastSpawnTime: 0,
   spawnInterval: 1.6,
   waveActive: false,
@@ -138,6 +165,42 @@ function loadObj(path) {
   });
 }
 
+function generatePath() {
+  const path = [];
+  const startZ = Math.floor(GRID_SIZE / 2);
+  let x = 0;
+  let z = startZ;
+  const endX = GRID_SIZE - 1;
+  path.push({ x, z });
+  while (x < endX) {
+    const options = [];
+    options.push({ x: x + 1, z });
+    if (z > 0) {
+      options.push({ x, z: z - 1 });
+    }
+    if (z < GRID_SIZE - 1) {
+      options.push({ x, z: z + 1 });
+    }
+    let next = options[0];
+    if (Math.random() < MAP_RANDOMNESS) {
+      next = options[Math.floor(Math.random() * options.length)];
+    }
+    if (next.x > endX) {
+      next.x = endX;
+    }
+    x = next.x;
+    z = next.z;
+    const last = path[path.length - 1];
+    if (!last || last.x !== x || last.z !== z) {
+      path.push({ x, z });
+    }
+  }
+  if (path[path.length - 1].x !== endX) {
+    path.push({ x: endX, z });
+  }
+  return path;
+}
+
 function getWaveTotal(wave) {
   return 6 + wave * 2;
 }
@@ -185,24 +248,14 @@ function gridToWorld(x, z) {
 }
 
 function isPathTile(x, z) {
-  return PATH.some((node) => node.x === x && node.z === z);
+  return state.path.some((node) => node.x === x && node.z === z);
 }
 
 function buildFarmTiles() {
   const tiles = new THREE.Group();
   for (let x = 0; x < GRID_SIZE; x += 1) {
     for (let z = 0; z < GRID_SIZE; z += 1) {
-      const tile = assets.tile.clone();
-      tile.traverse((child) => {
-        if (child.isMesh) {
-          const isPath = isPathTile(x, z);
-          child.material = new THREE.MeshStandardMaterial({
-            color: isPath ? "#caa86d" : "#8fd98f",
-          });
-          child.castShadow = false;
-          child.receiveShadow = true;
-        }
-      });
+      const tile = createTileMesh(x, z);
       const pos = gridToWorld(x, z);
       tile.position.copy(pos);
       tile.scale.setScalar(TILE_SIZE);
@@ -214,7 +267,7 @@ function buildFarmTiles() {
 
 function buildPathDecor() {
   const pathGroup = new THREE.Group();
-  PATH.forEach((node) => {
+  state.path.forEach((node) => {
     const marker = new THREE.Mesh(
       new THREE.CylinderGeometry(0.2, 0.3, 0.2, 12),
       new THREE.MeshStandardMaterial({ color: "#f6d6a8" })
@@ -224,6 +277,27 @@ function buildPathDecor() {
     pathGroup.add(marker);
   });
   scene.add(pathGroup);
+}
+
+function createTileMesh(x, z) {
+  const isPath = isPathTile(x, z);
+  const color = isPath ? "#caa86d" : "#8fd98f";
+  if (assets.tile) {
+    const tile = assets.tile.clone();
+    tile.traverse((child) => {
+      if (child.isMesh) {
+        child.material = new THREE.MeshStandardMaterial({ color });
+        child.castShadow = false;
+        child.receiveShadow = true;
+      }
+    });
+    return tile;
+  }
+  const geometry = new THREE.BoxGeometry(1, 0.2, 1);
+  const material = new THREE.MeshStandardMaterial({ color });
+  const tile = new THREE.Mesh(geometry, material);
+  tile.receiveShadow = true;
+  return tile;
 }
 
 function buildCuteDecor() {
@@ -257,8 +331,16 @@ function applyTowerMaterials(model, color, opacity = 1) {
 }
 
 function createPreviewTower() {
-  const base = assets.towerBase.clone();
-  const roof = assets.roof.clone();
+  const base = assets.towerBase
+    ? assets.towerBase.clone()
+    : new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.5, 0.6, 12));
+  const roof = assets.roof
+    ? assets.roof.clone()
+    : new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.5, 12));
+
+  const towerType = TOWER_TYPES[state.selectedTowerType];
+  applyTowerMaterials(base, towerType.baseColor, 0.6);
+  applyTowerMaterials(roof, towerType.roofColor, 0.6);
 
   const towerType = TOWER_TYPES[state.selectedTowerType];
   applyTowerMaterials(base, towerType.baseColor, 0.6);
@@ -278,7 +360,44 @@ function createPreviewTower() {
 
   base.scale.setScalar(1.2);
   roof.scale.setScalar(1.2);
-  roof.position.y = 0.6;
+  roof.position.y = assets.roof ? 0.6 : 0.7;
+
+  const tower = new THREE.Group();
+  tower.userData.isPreview = true;
+  tower.add(base);
+  tower.add(roof);
+  tower.position.y = 0.3;
+  tower.visible = false;
+  scene.add(tower);
+  return tower;
+}
+
+function updatePreviewColor(valid) {
+  if (!previewTower) {
+    return;
+  }
+  const color = valid ? "#b8f7c0" : "#f2a1a1";
+  previewTower.traverse((child) => {
+    if (child.isMesh && child.material?.color) {
+      child.material.color.set(color);
+    }
+  });
+}
+
+function createTower(position, towerType) {
+  const base = assets.towerBase
+    ? assets.towerBase.clone()
+    : new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.5, 0.6, 12));
+  const roof = assets.roof
+    ? assets.roof.clone()
+    : new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.5, 12));
+
+  applyTowerMaterials(base, towerType.baseColor);
+  applyTowerMaterials(roof, towerType.roofColor);
+
+  base.scale.setScalar(1.2);
+  roof.scale.setScalar(1.2);
+  roof.position.y = assets.roof ? 0.6 : 0.7;
 
   const tower = new THREE.Group();
   tower.userData.isPreview = true;
@@ -336,7 +455,10 @@ function spawnEnemy() {
     new THREE.SphereGeometry(0.3, 16, 16),
     new THREE.MeshStandardMaterial({ color: "#b087ff" })
   );
-  const start = gridToWorld(PATH[0].x, PATH[0].z);
+  if (!state.path.length) {
+    return;
+  }
+  const start = gridToWorld(state.path[0].x, state.path[0].z);
   enemy.position.set(start.x, 0.4, start.z);
   scene.add(enemy);
   state.enemies.push({
@@ -352,8 +474,8 @@ function spawnEnemy() {
 function updateEnemies(delta) {
   const finished = [];
   state.enemies.forEach((enemy, index) => {
-    const current = PATH[enemy.pathIndex];
-    const next = PATH[enemy.pathIndex + 1];
+    const current = state.path[enemy.pathIndex];
+    const next = state.path[enemy.pathIndex + 1];
     if (!next) {
       finished.push(index);
       return;
@@ -624,23 +746,28 @@ function setupUi() {
 }
 
 async function init() {
-  const [tileObj, towerObj, roofObj] = await Promise.all([
+  const [tileObj, towerObj, roofObj] = await Promise.allSettled([
     loadObj("assets/models/primitives/tile_ground.obj"),
     loadObj("assets/models/primitives/tower_base.obj"),
     loadObj("assets/models/primitives/barn_roof.obj"),
   ]);
 
-  assets.tile = tileObj;
-  assets.towerBase = towerObj;
-  assets.roof = roofObj;
+  assets.tile = tileObj.status === "fulfilled" ? tileObj.value : null;
+  assets.towerBase = towerObj.status === "fulfilled" ? towerObj.value : null;
+  assets.roof = roofObj.status === "fulfilled" ? roofObj.value : null;
 
+  state.path = generatePath();
   buildFarmTiles();
   buildPathDecor();
   buildCuteDecor();
   previewTower = createPreviewTower();
   setupUi();
   setSelectedTowerType(state.selectedTowerType);
-  setMessage("Build towers before the wave!", "info", 3000);
+  if (!assets.tile || !assets.towerBase || !assets.roof) {
+    setMessage("Loaded fallback geometry for the map.", "warning", 4000);
+  } else {
+    setMessage("Build towers before the wave!", "info", 3000);
+  }
 
   window.addEventListener("pointermove", onPointerMove);
   window.addEventListener("click", onClick);
