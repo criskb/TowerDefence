@@ -47,6 +47,48 @@ const TOWER_TYPES = {
   },
 };
 
+const TOWER_TYPES = {
+  sprout: {
+    id: "sprout",
+    name: "Sprout",
+    cost: 50,
+    range: 2.6,
+    fireRate: 0.8,
+    damage: 1,
+    projectileSpeed: 4.8,
+    projectileColor: "#ffdf7e",
+    baseColor: "#f2f0e6",
+    roofColor: "#f2a4a4",
+    description: "Fast shots, short range.",
+  },
+  bloom: {
+    id: "bloom",
+    name: "Bloom",
+    cost: 75,
+    range: 3.2,
+    fireRate: 1.1,
+    damage: 2,
+    projectileSpeed: 4.2,
+    projectileColor: "#b6f0ff",
+    baseColor: "#e6f4ff",
+    roofColor: "#78c6f0",
+    description: "Balanced range with heavier hits.",
+  },
+  orchard: {
+    id: "orchard",
+    name: "Orchard",
+    cost: 110,
+    range: 4.0,
+    fireRate: 1.6,
+    damage: 3,
+    projectileSpeed: 3.6,
+    projectileColor: "#f6c1ff",
+    baseColor: "#f7f0dd",
+    roofColor: "#c98bf2",
+    description: "Long range, slower but powerful.",
+  },
+};
+
 const state = {
   gold: 200,
   lives: 20,
@@ -300,6 +342,10 @@ function createPreviewTower() {
   applyTowerMaterials(base, towerType.baseColor, 0.6);
   applyTowerMaterials(roof, towerType.roofColor, 0.6);
 
+  const towerType = TOWER_TYPES[state.selectedTowerType];
+  applyTowerMaterials(base, towerType.baseColor, 0.6);
+  applyTowerMaterials(roof, towerType.roofColor, 0.6);
+
   base.traverse((child) => {
     if (child.isMesh) {
       child.userData.isPreview = true;
@@ -352,6 +398,39 @@ function createTower(position, towerType) {
   base.scale.setScalar(1.2);
   roof.scale.setScalar(1.2);
   roof.position.y = assets.roof ? 0.6 : 0.7;
+
+  const tower = new THREE.Group();
+  tower.userData.isPreview = true;
+  tower.add(base);
+  tower.add(roof);
+  tower.position.y = 0.3;
+  tower.visible = false;
+  scene.add(tower);
+  return tower;
+}
+
+function updatePreviewColor(valid) {
+  if (!previewTower) {
+    return;
+  }
+  const color = valid ? "#b8f7c0" : "#f2a1a1";
+  previewTower.traverse((child) => {
+    if (child.isMesh && child.material?.color) {
+      child.material.color.set(color);
+    }
+  });
+}
+
+function createTower(position, towerType) {
+  const base = assets.towerBase.clone();
+  const roof = assets.roof.clone();
+
+  applyTowerMaterials(base, towerType.baseColor);
+  applyTowerMaterials(roof, towerType.roofColor);
+
+  base.scale.setScalar(1.2);
+  roof.scale.setScalar(1.2);
+  roof.position.y = 0.6;
 
   const tower = new THREE.Group();
   tower.add(base);
