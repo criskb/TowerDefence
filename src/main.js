@@ -47,48 +47,6 @@ const TOWER_TYPES = {
   },
 };
 
-const TOWER_TYPES = {
-  sprout: {
-    id: "sprout",
-    name: "Sprout",
-    cost: 50,
-    range: 2.6,
-    fireRate: 0.8,
-    damage: 1,
-    projectileSpeed: 4.8,
-    projectileColor: "#ffdf7e",
-    baseColor: "#f2f0e6",
-    roofColor: "#f2a4a4",
-    description: "Fast shots, short range.",
-  },
-  bloom: {
-    id: "bloom",
-    name: "Bloom",
-    cost: 75,
-    range: 3.2,
-    fireRate: 1.1,
-    damage: 2,
-    projectileSpeed: 4.2,
-    projectileColor: "#b6f0ff",
-    baseColor: "#e6f4ff",
-    roofColor: "#78c6f0",
-    description: "Balanced range with heavier hits.",
-  },
-  orchard: {
-    id: "orchard",
-    name: "Orchard",
-    cost: 110,
-    range: 4.0,
-    fireRate: 1.6,
-    damage: 3,
-    projectileSpeed: 3.6,
-    projectileColor: "#f6c1ff",
-    baseColor: "#f7f0dd",
-    roofColor: "#c98bf2",
-    description: "Long range, slower but powerful.",
-  },
-};
-
 const state = {
   gold: 200,
   lives: 20,
@@ -125,6 +83,7 @@ const errorBanner = document.getElementById("error-banner");
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color("#cfe8ff");
+scene.fog = new THREE.Fog("#cfe8ff", 10, 30);
 
 const camera = new THREE.PerspectiveCamera(
   45,
@@ -138,10 +97,13 @@ camera.lookAt(0, 0, 0);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.getElementById("game").appendChild(renderer.domElement);
 
 const directionalLight = new THREE.DirectionalLight("#fff9e6", 1.2);
 directionalLight.position.set(6, 10, 4);
+directionalLight.castShadow = true;
 scene.add(directionalLight);
 
 const ambientLight = new THREE.AmbientLight("#ffffff", 0.5);
@@ -283,7 +245,11 @@ function buildPathDecor() {
 
 function createTileMesh(x, z) {
   const isPath = isPathTile(x, z);
-  const color = isPath ? "#caa86d" : "#8fd98f";
+  const baseColor = isPath ? "#caa86d" : "#8fd98f";
+  const color =
+    !isPath && (x + z) % 2 === 0
+      ? new THREE.Color(baseColor).offsetHSL(0.02, 0.08, 0.05)
+      : baseColor;
   if (assets.tile) {
     const tile = assets.tile.clone();
     tile.traverse((child) => {
@@ -303,6 +269,15 @@ function createTileMesh(x, z) {
 }
 
 function buildCuteDecor() {
+  const pasture = new THREE.Mesh(
+    new THREE.CircleGeometry(8.8, 64),
+    new THREE.MeshStandardMaterial({ color: "#c9f2b7" })
+  );
+  pasture.rotation.x = -Math.PI / 2;
+  pasture.position.y = -0.12;
+  pasture.receiveShadow = true;
+  scene.add(pasture);
+
   const fence = new THREE.Mesh(
     new THREE.TorusGeometry(0.45, 0.08, 12, 24),
     new THREE.MeshStandardMaterial({ color: "#f3b5b5" })
@@ -339,10 +314,6 @@ function createPreviewTower() {
   const roof = assets.roof
     ? assets.roof.clone()
     : new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.5, 12));
-
-  const towerType = TOWER_TYPES[state.selectedTowerType];
-  applyTowerMaterials(base, towerType.baseColor, 0.6);
-  applyTowerMaterials(roof, towerType.roofColor, 0.6);
 
   const towerType = TOWER_TYPES[state.selectedTowerType];
   applyTowerMaterials(base, towerType.baseColor, 0.6);
@@ -401,38 +372,18 @@ function createTower(position, towerType) {
   roof.scale.setScalar(1.2);
   roof.position.y = assets.roof ? 0.6 : 0.7;
 
-  const tower = new THREE.Group();
-  tower.userData.isPreview = true;
-  tower.add(base);
-  tower.add(roof);
-  tower.position.y = 0.3;
-  tower.visible = false;
-  scene.add(tower);
-  return tower;
-}
-
-function updatePreviewColor(valid) {
-  if (!previewTower) {
-    return;
-  }
-  const color = valid ? "#b8f7c0" : "#f2a1a1";
-  previewTower.traverse((child) => {
-    if (child.isMesh && child.material?.color) {
-      child.material.color.set(color);
+  base.traverse((child) => {
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
     }
   });
-}
-
-function createTower(position, towerType) {
-  const base = assets.towerBase.clone();
-  const roof = assets.roof.clone();
-
-  applyTowerMaterials(base, towerType.baseColor);
-  applyTowerMaterials(roof, towerType.roofColor);
-
-  base.scale.setScalar(1.2);
-  roof.scale.setScalar(1.2);
-  roof.position.y = 0.6;
+  roof.traverse((child) => {
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
 
   const tower = new THREE.Group();
   tower.add(base);
