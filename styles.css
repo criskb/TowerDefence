@@ -101,6 +101,23 @@ body {
   background: #f9f2e6;
 }
 
+.tower-upgrade {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: #6b5f4a;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: #f0f6ff;
+  border: 1px solid #d4e2f8;
+}
+
+.tower-upgrade button {
+  background: #6fb4f8;
+  color: #102a4d;
+  font-size: 13px;
+}
+
 button {
   background: #7ec47e;
   border: none;
