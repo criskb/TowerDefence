@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fantasy Farm Tower Defense</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="ui">
+      <div class="brand">
+        <h1>Fantasy Farm Defense</h1>
+        <p>Cute farm tiles, towers, and critters.</p>
+      </div>
+      <div class="stats">
+        <div>Gold: <span id="gold">200</span></div>
+        <div>Lives: <span id="lives">20</span></div>
+        <div>Wave: <span id="wave">1</span></div>
+      </div>
+      <div class="controls">
+        <button id="place-tower">Place Tower (50)</button>
+        <button id="start-wave">Start Wave</button>
+        <div class="hint">Click a tile to place a tower.</div>
+      </div>
+    </div>
+    <div id="game"></div>
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>
