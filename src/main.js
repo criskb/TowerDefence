@@ -1,5 +1,5 @@
-import * as THREE from "https://unpkg.com/three@0.158.0/build/three.module.js";
-import { OBJLoader } from "https://unpkg.com/three@0.158.0/examples/jsm/loaders/OBJLoader.js";
+import * as THREE from "three";
+import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 
 const GRID_SIZE = 9;
 const TILE_SIZE = 1.2;

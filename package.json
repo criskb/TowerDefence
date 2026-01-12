@@ -1,0 +1,20 @@
+{
+  "name": "tower-defence",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/main.js --bundle --outfile=dist/main.js --format=esm --sourcemap",
+    "watch": "esbuild src/main.js --bundle --outfile=dist/main.js --format=esm --sourcemap --watch",
+    "serve": "live-server --port=5173 --open=index.html",
+    "dev": "concurrently \"npm:watch\" \"npm:serve\""
+  },
+  "dependencies": {
+    "three": "^0.158.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "esbuild": "^0.20.2",
+    "live-server": "^1.2.2"
+  }
+}
