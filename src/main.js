@@ -21,6 +21,48 @@ const PATH = [
   { x: 8, z: 6 },
 ];
 
+const TOWER_TYPES = {
+  sprout: {
+    id: "sprout",
+    name: "Sprout",
+    cost: 50,
+    range: 2.6,
+    fireRate: 0.8,
+    damage: 1,
+    projectileSpeed: 4.8,
+    projectileColor: "#ffdf7e",
+    baseColor: "#f2f0e6",
+    roofColor: "#f2a4a4",
+    description: "Fast shots, short range.",
+  },
+  bloom: {
+    id: "bloom",
+    name: "Bloom",
+    cost: 75,
+    range: 3.2,
+    fireRate: 1.1,
+    damage: 2,
+    projectileSpeed: 4.2,
+    projectileColor: "#b6f0ff",
+    baseColor: "#e6f4ff",
+    roofColor: "#78c6f0",
+    description: "Balanced range with heavier hits.",
+  },
+  orchard: {
+    id: "orchard",
+    name: "Orchard",
+    cost: 110,
+    range: 4.0,
+    fireRate: 1.6,
+    damage: 3,
+    projectileSpeed: 3.6,
+    projectileColor: "#f6c1ff",
+    baseColor: "#f7f0dd",
+    roofColor: "#c98bf2",
+    description: "Long range, slower but powerful.",
+  },
+};
+
 const state = {
   gold: 200,
   lives: 20,
@@ -35,6 +77,7 @@ const state = {
   enemiesSpawned: 0,
   enemiesTotal: 0,
   status: "Ready",
+  selectedTowerType: "sprout",
 };
 
 const ui = {
@@ -43,6 +86,9 @@ const ui = {
   wave: document.getElementById("wave"),
   enemies: document.getElementById("enemies"),
   status: document.getElementById("status"),
+  towerName: document.getElementById("tower-name"),
+  towerDetails: document.getElementById("tower-details"),
+  towerOptions: Array.from(document.querySelectorAll(".tower-option")),
   placeTower: document.getElementById("place-tower"),
   startWave: document.getElementById("start-wave"),
   message: document.getElementById("message"),
@@ -126,6 +172,7 @@ function updateUi() {
   const defeated = state.enemiesSpawned - state.enemies.length;
   const remaining = Math.max(0, state.enemiesTotal - defeated);
   ui.enemies.textContent = remaining;
+  ui.towerName.textContent = TOWER_TYPES[state.selectedTowerType].name;
 }
 
 function gridToWorld(x, z) {
@@ -197,28 +244,34 @@ function buildCuteDecor() {
   scene.add(pond);
 }
 
+function applyTowerMaterials(model, color, opacity = 1) {
+  model.traverse((child) => {
+    if (child.isMesh) {
+      child.material = new THREE.MeshStandardMaterial({
+        color,
+        transparent: opacity < 1,
+        opacity,
+      });
+    }
+  });
+}
+
 function createPreviewTower() {
   const base = assets.towerBase.clone();
   const roof = assets.roof.clone();
 
+  const towerType = TOWER_TYPES[state.selectedTowerType];
+  applyTowerMaterials(base, towerType.baseColor, 0.6);
+  applyTowerMaterials(roof, towerType.roofColor, 0.6);
+
   base.traverse((child) => {
     if (child.isMesh) {
-      child.material = new THREE.MeshStandardMaterial({
-        color: "#b8f7c0",
-        transparent: true,
-        opacity: 0.6,
-      });
       child.userData.isPreview = true;
     }
   });
 
   roof.traverse((child) => {
     if (child.isMesh) {
-      child.material = new THREE.MeshStandardMaterial({
-        color: "#b8f7c0",
-        transparent: true,
-        opacity: 0.6,
-      });
       child.userData.isPreview = true;
     }
   });
@@ -249,21 +302,12 @@ function updatePreviewColor(valid) {
   });
 }
 
-function createTower(position) {
+function createTower(position, towerType) {
   const base = assets.towerBase.clone();
   const roof = assets.roof.clone();
 
-  base.traverse((child) => {
-    if (child.isMesh) {
-      child.material = new THREE.MeshStandardMaterial({ color: "#f2f0e6" });
-    }
-  });
-
-  roof.traverse((child) => {
-    if (child.isMesh) {
-      child.material = new THREE.MeshStandardMaterial({ color: "#f2a4a4" });
-    }
-  });
+  applyTowerMaterials(base, towerType.baseColor);
+  applyTowerMaterials(roof, towerType.roofColor);
 
   base.scale.setScalar(1.2);
   roof.scale.setScalar(1.2);
@@ -279,7 +323,11 @@ function createTower(position) {
   state.towers.push({
     mesh: tower,
     cooldown: 0,
-    range: 2.8,
+    range: towerType.range,
+    fireRate: towerType.fireRate,
+    damage: towerType.damage,
+    projectileSpeed: towerType.projectileSpeed,
+    projectileColor: towerType.projectileColor,
   });
 }
 
@@ -338,10 +386,10 @@ function updateTowers(delta) {
       enemy.mesh.position.distanceTo(tower.mesh.position) < tower.range
     );
     if (target) {
-      tower.cooldown = 1.0;
+      tower.cooldown = tower.fireRate;
       const projectile = new THREE.Mesh(
         new THREE.SphereGeometry(0.12, 8, 8),
-        new THREE.MeshStandardMaterial({ color: "#ffdf7e" })
+        new THREE.MeshStandardMaterial({ color: tower.projectileColor })
       );
       projectile.position.copy(tower.mesh.position);
       projectile.position.y += 0.4;
@@ -349,7 +397,8 @@ function updateTowers(delta) {
       state.projectiles.push({
         mesh: projectile,
         target,
-        speed: 4.2,
+        speed: tower.projectileSpeed,
+        damage: tower.damage,
       });
     }
   });
@@ -367,7 +416,7 @@ function updateProjectiles(delta) {
     const direction = targetPos.clone().sub(projectile.mesh.position);
     const distance = direction.length();
     if (distance < 0.2) {
-      projectile.target.hp -= 1;
+      projectile.target.hp -= projectile.damage;
       remove.push(index);
       scene.remove(projectile.mesh);
       if (projectile.target.hp <= 0) {
@@ -446,7 +495,7 @@ function getPlacementData() {
   const occupied = state.towers.some(
     (tower) => tower.mesh.position.distanceTo(pos) < 0.1
   );
-  if (occupied || state.gold < 50) {
+  if (occupied || state.gold < TOWER_TYPES[state.selectedTowerType].cost) {
     return { valid: false, pos };
   }
   return { valid: true, pos };
@@ -472,6 +521,38 @@ function updatePlacementPreview() {
   updatePreviewColor(placement.valid);
 }
 
+function setSelectedTowerType(typeId) {
+  const towerType = TOWER_TYPES[typeId];
+  if (!towerType) {
+    return;
+  }
+  state.selectedTowerType = typeId;
+  ui.towerName.textContent = towerType.name;
+  ui.towerDetails.textContent = towerType.description;
+  ui.towerOptions.forEach((button) => {
+    button.classList.toggle(
+      "selected",
+      button.dataset.type === state.selectedTowerType
+    );
+  });
+  ui.placeTower.textContent = `Place ${towerType.name} (${towerType.cost})`;
+  if (previewTower) {
+    previewTower.traverse((child) => {
+      if (child.isMesh) {
+        child.userData.isPreview = true;
+      }
+    });
+    previewTower.children.forEach((child, index) => {
+      if (index === 0) {
+        applyTowerMaterials(child, towerType.baseColor, 0.6);
+      } else {
+        applyTowerMaterials(child, towerType.roofColor, 0.6);
+      }
+    });
+  }
+  updatePlacementPreview();
+}
+
 function onClick(event) {
   onPointerMove(event);
   if (!state.placingTower) {
@@ -482,11 +563,12 @@ function onClick(event) {
     setMessage("Choose an empty grass tile and enough gold.", "warning");
     return;
   }
-  state.gold -= 50;
-  createTower(placement.pos);
+  const towerType = TOWER_TYPES[state.selectedTowerType];
+  state.gold -= towerType.cost;
+  createTower(placement.pos, towerType);
   state.placingTower = false;
   ui.placeTower.classList.remove("secondary");
-  ui.placeTower.textContent = "Place Tower (50)";
+  ui.placeTower.textContent = `Place ${towerType.name} (${towerType.cost})`;
   updateUi();
 }
 
@@ -510,12 +592,20 @@ function animate(time) {
 }
 
 function setupUi() {
+  ui.towerOptions.forEach((button) => {
+    button.addEventListener("click", () => {
+      setSelectedTowerType(button.dataset.type);
+    });
+  });
   ui.placeTower.addEventListener("click", () => {
     state.placingTower = !state.placingTower;
     ui.placeTower.classList.toggle("secondary", state.placingTower);
-    ui.placeTower.textContent = state.placingTower
-      ? "Cancel Placement"
-      : "Place Tower (50)";
+    if (state.placingTower) {
+      ui.placeTower.textContent = "Cancel Placement";
+    } else {
+      const towerType = TOWER_TYPES[state.selectedTowerType];
+      ui.placeTower.textContent = `Place ${towerType.name} (${towerType.cost})`;
+    }
     updatePlacementPreview();
   });
   ui.startWave.addEventListener("click", () => {
@@ -549,6 +639,7 @@ async function init() {
   buildCuteDecor();
   previewTower = createPreviewTower();
   setupUi();
+  setSelectedTowerType(state.selectedTowerType);
   setMessage("Build towers before the wave!", "info", 3000);
 
   window.addEventListener("pointermove", onPointerMove);

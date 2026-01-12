@@ -18,8 +18,23 @@
         <div>Wave: <span id="wave">1</span></div>
         <div>Enemies: <span id="enemies">0</span></div>
         <div>Status: <span id="status">Ready</span></div>
+        <div>Tower: <span id="tower-name">Sprout</span></div>
       </div>
       <div class="controls">
+        <div class="tower-shop">
+          <button class="tower-option selected" data-type="sprout">
+            Sprout<br /><span>50g</span>
+          </button>
+          <button class="tower-option" data-type="bloom">
+            Bloom<br /><span>75g</span>
+          </button>
+          <button class="tower-option" data-type="orchard">
+            Orchard<br /><span>110g</span>
+          </button>
+        </div>
+        <div class="tower-details" id="tower-details">
+          Fast shots, short range.
+        </div>
         <button id="place-tower">Place Tower (50)</button>
         <button id="start-wave">Start Wave</button>
         <div class="hint">Click a tile to place a tower.</div>
