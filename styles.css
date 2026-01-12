@@ -50,6 +50,41 @@ body {
   gap: 8px;
 }
 
+.tower-shop {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.tower-option {
+  background: #f2e8d8;
+  border: 2px solid transparent;
+  padding: 6px 4px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.tower-option span {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b5f4a;
+}
+
+.tower-option.selected {
+  border-color: #7ec47e;
+  background: #e5f4e5;
+}
+
+.tower-details {
+  font-size: 12px;
+  color: #6b5f4a;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: #f9f2e6;
+}
+
 button {
   background: #7ec47e;
   border: none;
@@ -74,4 +109,28 @@ button:disabled {
 .hint {
   font-size: 12px;
   color: #6b5f4a;
+}
+
+.message {
+  min-height: 18px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  background: #f4efe5;
+  color: #5d4c35;
+}
+
+.message[data-tone="success"] {
+  background: #e0f5df;
+  color: #2f5b2c;
+}
+
+.message[data-tone="warning"] {
+  background: #fde9c8;
+  color: #7a4d12;
+}
+
+.message[data-tone="danger"] {
+  background: #fde1df;
+  color: #7c2f2a;
 }

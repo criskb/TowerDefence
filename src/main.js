@@ -21,6 +21,48 @@ const PATH = [
   { x: 8, z: 6 },
 ];
 
+const TOWER_TYPES = {
+  sprout: {
+    id: "sprout",
+    name: "Sprout",
+    cost: 50,
+    range: 2.6,
+    fireRate: 0.8,
+    damage: 1,
+    projectileSpeed: 4.8,
+    projectileColor: "#ffdf7e",
+    baseColor: "#f2f0e6",
+    roofColor: "#f2a4a4",
+    description: "Fast shots, short range.",
+  },
+  bloom: {
+    id: "bloom",
+    name: "Bloom",
+    cost: 75,
+    range: 3.2,
+    fireRate: 1.1,
+    damage: 2,
+    projectileSpeed: 4.2,
+    projectileColor: "#b6f0ff",
+    baseColor: "#e6f4ff",
+    roofColor: "#78c6f0",
+    description: "Balanced range with heavier hits.",
+  },
+  orchard: {
+    id: "orchard",
+    name: "Orchard",
+    cost: 110,
+    range: 4.0,
+    fireRate: 1.6,
+    damage: 3,
+    projectileSpeed: 3.6,
+    projectileColor: "#f6c1ff",
+    baseColor: "#f7f0dd",
+    roofColor: "#c98bf2",
+    description: "Long range, slower but powerful.",
+  },
+};
+
 const state = {
   gold: 200,
   lives: 20,
@@ -32,14 +74,24 @@ const state = {
   lastSpawnTime: 0,
   spawnInterval: 1.6,
   waveActive: false,
+  enemiesSpawned: 0,
+  enemiesTotal: 0,
+  status: "Ready",
+  selectedTowerType: "sprout",
 };
 
 const ui = {
   gold: document.getElementById("gold"),
   lives: document.getElementById("lives"),
   wave: document.getElementById("wave"),
+  enemies: document.getElementById("enemies"),
+  status: document.getElementById("status"),
+  towerName: document.getElementById("tower-name"),
+  towerDetails: document.getElementById("tower-details"),
+  towerOptions: Array.from(document.querySelectorAll(".tower-option")),
   placeTower: document.getElementById("place-tower"),
   startWave: document.getElementById("start-wave"),
+  message: document.getElementById("message"),
 };
 
 const scene = new THREE.Scene();
@@ -77,16 +129,50 @@ const assets = {
   roof: null,
 };
 
+let messageTimeout = null;
+let previewTower = null;
+
 function loadObj(path) {
   return new Promise((resolve, reject) => {
     loader.load(path, resolve, undefined, reject);
   });
 }
 
+function getWaveTotal(wave) {
+  return 6 + wave * 2;
+}
+
+function getSpawnInterval(wave) {
+  return Math.max(0.7, 1.6 - wave * 0.1);
+}
+
+function setStatus(text) {
+  state.status = text;
+  ui.status.textContent = text;
+}
+
+function setMessage(text, tone = "info", duration = 2500) {
+  ui.message.textContent = text;
+  ui.message.dataset.tone = tone;
+  if (messageTimeout) {
+    clearTimeout(messageTimeout);
+  }
+  if (duration) {
+    messageTimeout = setTimeout(() => {
+      ui.message.textContent = "";
+      ui.message.dataset.tone = "";
+    }, duration);
+  }
+}
+
 function updateUi() {
   ui.gold.textContent = state.gold;
   ui.lives.textContent = state.lives;
   ui.wave.textContent = state.wave;
+  const defeated = state.enemiesSpawned - state.enemies.length;
+  const remaining = Math.max(0, state.enemiesTotal - defeated);
+  ui.enemies.textContent = remaining;
+  ui.towerName.textContent = TOWER_TYPES[state.selectedTowerType].name;
 }
 
 function gridToWorld(x, z) {
@@ -158,21 +244,70 @@ function buildCuteDecor() {
   scene.add(pond);
 }
 
-function createTower(position) {
+function applyTowerMaterials(model, color, opacity = 1) {
+  model.traverse((child) => {
+    if (child.isMesh) {
+      child.material = new THREE.MeshStandardMaterial({
+        color,
+        transparent: opacity < 1,
+        opacity,
+      });
+    }
+  });
+}
+
+function createPreviewTower() {
   const base = assets.towerBase.clone();
   const roof = assets.roof.clone();
 
+  const towerType = TOWER_TYPES[state.selectedTowerType];
+  applyTowerMaterials(base, towerType.baseColor, 0.6);
+  applyTowerMaterials(roof, towerType.roofColor, 0.6);
+
   base.traverse((child) => {
     if (child.isMesh) {
-      child.material = new THREE.MeshStandardMaterial({ color: "#f2f0e6" });
+      child.userData.isPreview = true;
     }
   });
 
   roof.traverse((child) => {
     if (child.isMesh) {
-      child.material = new THREE.MeshStandardMaterial({ color: "#f2a4a4" });
+      child.userData.isPreview = true;
     }
   });
+
+  base.scale.setScalar(1.2);
+  roof.scale.setScalar(1.2);
+  roof.position.y = 0.6;
+
+  const tower = new THREE.Group();
+  tower.userData.isPreview = true;
+  tower.add(base);
+  tower.add(roof);
+  tower.position.y = 0.3;
+  tower.visible = false;
+  scene.add(tower);
+  return tower;
+}
+
+function updatePreviewColor(valid) {
+  if (!previewTower) {
+    return;
+  }
+  const color = valid ? "#b8f7c0" : "#f2a1a1";
+  previewTower.traverse((child) => {
+    if (child.isMesh && child.material?.color) {
+      child.material.color.set(color);
+    }
+  });
+}
+
+function createTower(position, towerType) {
+  const base = assets.towerBase.clone();
+  const roof = assets.roof.clone();
+
+  applyTowerMaterials(base, towerType.baseColor);
+  applyTowerMaterials(roof, towerType.roofColor);
 
   base.scale.setScalar(1.2);
   roof.scale.setScalar(1.2);
@@ -188,7 +323,11 @@ function createTower(position) {
   state.towers.push({
     mesh: tower,
     cooldown: 0,
-    range: 2.8,
+    range: towerType.range,
+    fireRate: towerType.fireRate,
+    damage: towerType.damage,
+    projectileSpeed: towerType.projectileSpeed,
+    projectileColor: towerType.projectileColor,
   });
 }
 
@@ -207,6 +346,7 @@ function spawnEnemy() {
     speed: 0.5 + state.wave * 0.05,
     hp: 3 + state.wave,
   });
+  state.enemiesSpawned += 1;
 }
 
 function updateEnemies(delta) {
@@ -246,10 +386,10 @@ function updateTowers(delta) {
       enemy.mesh.position.distanceTo(tower.mesh.position) < tower.range
     );
     if (target) {
-      tower.cooldown = 1.0;
+      tower.cooldown = tower.fireRate;
       const projectile = new THREE.Mesh(
         new THREE.SphereGeometry(0.12, 8, 8),
-        new THREE.MeshStandardMaterial({ color: "#ffdf7e" })
+        new THREE.MeshStandardMaterial({ color: tower.projectileColor })
       );
       projectile.position.copy(tower.mesh.position);
       projectile.position.y += 0.4;
@@ -257,7 +397,8 @@ function updateTowers(delta) {
       state.projectiles.push({
         mesh: projectile,
         target,
-        speed: 4.2,
+        speed: tower.projectileSpeed,
+        damage: tower.damage,
       });
     }
   });
@@ -275,7 +416,7 @@ function updateProjectiles(delta) {
     const direction = targetPos.clone().sub(projectile.mesh.position);
     const distance = direction.length();
     if (distance < 0.2) {
-      projectile.target.hp -= 1;
+      projectile.target.hp -= projectile.damage;
       remove.push(index);
       scene.remove(projectile.mesh);
       if (projectile.target.hp <= 0) {
@@ -299,49 +440,135 @@ function updateWave(delta) {
     return;
   }
   state.lastSpawnTime += delta;
-  if (state.lastSpawnTime >= state.spawnInterval) {
+  if (
+    state.lastSpawnTime >= state.spawnInterval &&
+    state.enemiesSpawned < state.enemiesTotal
+  ) {
     state.lastSpawnTime = 0;
     spawnEnemy();
+  }
+  if (
+    state.enemiesSpawned >= state.enemiesTotal &&
+    state.enemies.length === 0
+  ) {
+    state.waveActive = false;
+    ui.startWave.disabled = false;
+    setStatus("Ready");
+    const reward = 25 + state.wave * 5;
+    state.gold += reward;
+    setMessage(`Wave cleared! +${reward} gold`, "success", 3000);
+    state.wave += 1;
   }
   if (state.lives <= 0) {
     state.waveActive = false;
     ui.startWave.disabled = true;
+    setStatus("Game Over");
+    setMessage("The farm has fallen!", "danger", 0);
   }
 }
 
 function onPointerMove(event) {
   pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
   pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+  updatePlacementPreview();
 }
 
-function onClick(event) {
-  onPointerMove(event);
+function getPlacementData() {
   raycaster.setFromCamera(pointer, camera);
   const hits = raycaster.intersectObjects(scene.children, true);
-  const hit = hits.find((item) => item.object.parent);
-  if (!hit || !state.placingTower) {
-    return;
+  const hit = hits.find(
+    (item) => item.object.parent && !item.object.userData.isPreview
+  );
+  if (!hit) {
+    return null;
   }
   const point = hit.point;
   const gridX = Math.round(point.x / TILE_SIZE + (GRID_SIZE - 1) / 2);
   const gridZ = Math.round(point.z / TILE_SIZE + (GRID_SIZE - 1) / 2);
   if (gridX < 0 || gridZ < 0 || gridX >= GRID_SIZE || gridZ >= GRID_SIZE) {
-    return;
+    return { valid: false };
   }
   if (isPathTile(gridX, gridZ)) {
-    return;
+    return { valid: false, pos: gridToWorld(gridX, gridZ) };
   }
   const pos = gridToWorld(gridX, gridZ);
   const occupied = state.towers.some(
     (tower) => tower.mesh.position.distanceTo(pos) < 0.1
   );
-  if (occupied || state.gold < 50) {
+  if (occupied || state.gold < TOWER_TYPES[state.selectedTowerType].cost) {
+    return { valid: false, pos };
+  }
+  return { valid: true, pos };
+}
+
+function updatePlacementPreview() {
+  if (!previewTower) {
     return;
   }
-  state.gold -= 50;
-  createTower(pos);
+  if (!state.placingTower) {
+    previewTower.visible = false;
+    return;
+  }
+  const placement = getPlacementData();
+  if (!placement) {
+    previewTower.visible = false;
+    return;
+  }
+  previewTower.visible = true;
+  if (placement.pos) {
+    previewTower.position.copy(placement.pos);
+  }
+  updatePreviewColor(placement.valid);
+}
+
+function setSelectedTowerType(typeId) {
+  const towerType = TOWER_TYPES[typeId];
+  if (!towerType) {
+    return;
+  }
+  state.selectedTowerType = typeId;
+  ui.towerName.textContent = towerType.name;
+  ui.towerDetails.textContent = towerType.description;
+  ui.towerOptions.forEach((button) => {
+    button.classList.toggle(
+      "selected",
+      button.dataset.type === state.selectedTowerType
+    );
+  });
+  ui.placeTower.textContent = `Place ${towerType.name} (${towerType.cost})`;
+  if (previewTower) {
+    previewTower.traverse((child) => {
+      if (child.isMesh) {
+        child.userData.isPreview = true;
+      }
+    });
+    previewTower.children.forEach((child, index) => {
+      if (index === 0) {
+        applyTowerMaterials(child, towerType.baseColor, 0.6);
+      } else {
+        applyTowerMaterials(child, towerType.roofColor, 0.6);
+      }
+    });
+  }
+  updatePlacementPreview();
+}
+
+function onClick(event) {
+  onPointerMove(event);
+  if (!state.placingTower) {
+    return;
+  }
+  const placement = getPlacementData();
+  if (!placement || !placement.valid) {
+    setMessage("Choose an empty grass tile and enough gold.", "warning");
+    return;
+  }
+  const towerType = TOWER_TYPES[state.selectedTowerType];
+  state.gold -= towerType.cost;
+  createTower(placement.pos, towerType);
   state.placingTower = false;
   ui.placeTower.classList.remove("secondary");
+  ui.placeTower.textContent = `Place ${towerType.name} (${towerType.cost})`;
   updateUi();
 }
 
@@ -365,19 +592,34 @@ function animate(time) {
 }
 
 function setupUi() {
+  ui.towerOptions.forEach((button) => {
+    button.addEventListener("click", () => {
+      setSelectedTowerType(button.dataset.type);
+    });
+  });
   ui.placeTower.addEventListener("click", () => {
     state.placingTower = !state.placingTower;
     ui.placeTower.classList.toggle("secondary", state.placingTower);
+    if (state.placingTower) {
+      ui.placeTower.textContent = "Cancel Placement";
+    } else {
+      const towerType = TOWER_TYPES[state.selectedTowerType];
+      ui.placeTower.textContent = `Place ${towerType.name} (${towerType.cost})`;
+    }
+    updatePlacementPreview();
   });
   ui.startWave.addEventListener("click", () => {
+    if (state.waveActive || state.lives <= 0) {
+      return;
+    }
     state.waveActive = true;
     state.lastSpawnTime = 0;
-    state.wave += 1;
+    state.enemiesSpawned = 0;
+    state.enemiesTotal = getWaveTotal(state.wave);
+    state.spawnInterval = getSpawnInterval(state.wave);
     ui.startWave.disabled = true;
-    setTimeout(() => {
-      ui.startWave.disabled = false;
-      state.waveActive = false;
-    }, 14000);
+    setStatus(`Wave ${state.wave} in progress`);
+    setMessage(`Wave ${state.wave} started!`, "success", 2000);
   });
 }
 
@@ -395,7 +637,10 @@ async function init() {
   buildFarmTiles();
   buildPathDecor();
   buildCuteDecor();
+  previewTower = createPreviewTower();
   setupUi();
+  setSelectedTowerType(state.selectedTowerType);
+  setMessage("Build towers before the wave!", "info", 3000);
 
   window.addEventListener("pointermove", onPointerMove);
   window.addEventListener("click", onClick);
