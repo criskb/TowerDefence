@@ -75,3 +75,27 @@ button:disabled {
   font-size: 12px;
   color: #6b5f4a;
 }
+
+.message {
+  min-height: 18px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  background: #f4efe5;
+  color: #5d4c35;
+}
+
+.message[data-tone="success"] {
+  background: #e0f5df;
+  color: #2f5b2c;
+}
+
+.message[data-tone="warning"] {
+  background: #fde9c8;
+  color: #7a4d12;
+}
+
+.message[data-tone="danger"] {
+  background: #fde1df;
+  color: #7c2f2a;
+}
