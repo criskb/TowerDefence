@@ -14,6 +14,7 @@ const BUILD_ZONES = [
   { x: 6, z: 7, w: 4, h: 3 },
 ];
 const MAX_TOWER_LEVEL = 3;
+const GAME_SPEEDS = [1, 2, 3];
 
 const TOWER_TYPES = {
   sprout: {
@@ -76,6 +77,8 @@ const state = {
   status: "Ready",
   selectedTowerType: "sprout",
   selectedTowerId: null,
+  kills: 0,
+  gameSpeed: GAME_SPEEDS[0],
 };
 
 const ui = {
@@ -83,6 +86,7 @@ const ui = {
   lives: document.getElementById("lives"),
   wave: document.getElementById("wave"),
   enemies: document.getElementById("enemies"),
+  kills: document.getElementById("kills"),
   status: document.getElementById("status"),
   towerName: document.getElementById("tower-name"),
   towerDetails: document.getElementById("tower-details"),
@@ -92,6 +96,8 @@ const ui = {
   upgradeTower: document.getElementById("upgrade-tower"),
   placeTower: document.getElementById("place-tower"),
   startWave: document.getElementById("start-wave"),
+  speedToggle: document.getElementById("speed-toggle"),
+  waveProgressFill: document.getElementById("wave-progress-fill"),
   message: document.getElementById("message"),
 };
 
@@ -254,6 +260,22 @@ function getSpawnInterval(wave) {
   return Math.max(0.7, 1.6 - wave * 0.1);
 }
 
+function getWaveProgress() {
+  if (!state.waveActive || state.enemiesTotal === 0) {
+    return 0;
+  }
+  const cleared = state.enemiesSpawned - state.enemies.length;
+  return clamp(cleared / state.enemiesTotal, 0, 1);
+}
+
+function cycleGameSpeed() {
+  const currentIndex = GAME_SPEEDS.indexOf(state.gameSpeed);
+  const nextIndex = (currentIndex + 1) % GAME_SPEEDS.length;
+  state.gameSpeed = GAME_SPEEDS[nextIndex];
+  ui.speedToggle.textContent = `Speed: ${state.gameSpeed}x`;
+  setMessage(`Game speed set to ${state.gameSpeed}x`, "info", 1200);
+}
+
 function setStatus(text) {
   state.status = text;
   ui.status.textContent = text;
@@ -280,6 +302,9 @@ function updateUi() {
   const defeated = state.enemiesSpawned - state.enemies.length;
   const remaining = Math.max(0, state.enemiesTotal - defeated);
   ui.enemies.textContent = remaining;
+  ui.kills.textContent = state.kills;
+  const progress = state.waveActive ? getWaveProgress() : 0;
+  ui.waveProgressFill.style.width = `${Math.round(progress * 100)}%`;
   ui.towerName.textContent = TOWER_TYPES[state.selectedTowerType].name;
   if (state.selectedTowerId) {
     const selected = state.towers.find(
@@ -792,12 +817,15 @@ function spawnEnemy() {
   const start = gridToWorld(state.path[0].x, state.path[0].z);
   enemy.position.set(start.x, start.y + 0.25, start.z);
   scene.add(enemy);
+  const variance = 0.9 + Math.random() * 0.3;
   state.enemies.push({
     mesh: enemy,
     pathIndex: 0,
     progress: 0,
-    speed: 0.5 + state.wave * 0.05,
+    speed: (0.5 + state.wave * 0.05) * variance,
     hp: 3 + state.wave,
+    maxHp: 3 + state.wave,
+    reward: 8 + Math.floor(state.wave * 1.5),
   });
   state.enemiesSpawned += 1;
 }
@@ -877,7 +905,8 @@ function updateProjectiles(delta) {
         state.enemies = state.enemies.filter(
           (enemy) => enemy !== projectile.target
         );
-        state.gold += 10;
+        state.gold += projectile.target.reward;
+        state.kills += 1;
       }
       return;
     }
@@ -911,11 +940,13 @@ function updateWave(delta) {
     state.gold += reward;
     setMessage(`Wave cleared! +${reward} gold`, "success", 3000);
     state.wave += 1;
+    ui.waveProgressFill.style.width = "0%";
   }
   if (state.lives <= 0) {
     state.waveActive = false;
     ui.startWave.disabled = true;
     setStatus("Game Over");
+    ui.waveProgressFill.style.width = "0%";
     setMessage("The shrine has fallen!", "danger", 0);
   }
 }
@@ -1135,7 +1166,8 @@ function resize() {
 
 let lastTime = performance.now();
 function animate(time) {
-  const delta = (time - lastTime) / 1000;
+  const rawDelta = (time - lastTime) / 1000;
+  const delta = rawDelta * state.gameSpeed;
   lastTime = time;
   updateWave(delta);
   updateEnemies(delta);
@@ -1164,6 +1196,7 @@ function setupUi() {
     updatePlacementPreview();
   });
   ui.upgradeTower.addEventListener("click", upgradeSelectedTower);
+  ui.speedToggle.addEventListener("click", cycleGameSpeed);
   ui.startWave.addEventListener("click", () => {
     if (state.waveActive || state.lives <= 0) {
       return;
@@ -1174,6 +1207,7 @@ function setupUi() {
     state.enemiesTotal = getWaveTotal(state.wave);
     state.spawnInterval = getSpawnInterval(state.wave);
     ui.startWave.disabled = true;
+    ui.waveProgressFill.style.width = "0%";
     setStatus(`Wave ${state.wave} in progress`);
     setMessage(`Wave ${state.wave} started!`, "success", 2000);
   });
@@ -1212,6 +1246,7 @@ async function init() {
     buildGoal();
     previewTower = createPreviewTower();
     setupUi();
+    ui.speedToggle.textContent = `Speed: ${state.gameSpeed}x`;
     setSelectedTowerType(state.selectedTowerType);
     if (!assets.tile || !assets.towerBase || !assets.roof) {
       setMessage("Loaded fallback geometry for the map.", "warning", 4000);

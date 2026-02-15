@@ -61,6 +61,22 @@ body {
   font-weight: 600;
 }
 
+
+.wave-progress {
+  height: 10px;
+  border-radius: 999px;
+  background: #e5edf5;
+  overflow: hidden;
+  margin-bottom: 10px;
+  border: 1px solid #cfdae6;
+}
+
+#wave-progress-fill {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #6fb4f8, #7ec47e);
+  transition: width 0.2s ease;
+}
 .controls {
   display: grid;
   gap: 8px;
